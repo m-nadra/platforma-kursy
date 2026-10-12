@@ -1,0 +1,10 @@
+{
+  "type": "module",
+	"scripts": {
+		"start": "node main.js",
+		"dev": "node --watch main.js"
+	},
+  "dependencies": {
+    "express": "^5.3.0"
+  }
+}
