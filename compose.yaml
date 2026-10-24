@@ -32,9 +32,12 @@ services:
       - 127.0.0.1:3000:3000
     networks: [frontend-net, backend-net]
     environment:
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_USER_PASSWORD: ${ADMIN_USER_PASSWORD}
       BACKEND_PORT: 3000
       FRONTEND_HOST: frontend
       FRONTEND_PORT: 5173
+      JWT_SECRET: ${JWT_SECRET}
       MYSQL_HOST: mysql
       MYSQL_PORT: 3306
       MYSQL_DATABASE: mydb

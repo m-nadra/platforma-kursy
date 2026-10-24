@@ -2,8 +2,9 @@ import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import cookieParser from "cookie-parser";
-import { verifyConnection as verifyMySQL, closePool } from './db/index.js';
+import { verifyConnection as verifyMySQL, closePool, users } from './db/index.js';
 import { verifyConnection as verifyRedis, closeRedis } from './redis/index.js';
+import authRouter from './routes/auth.js'
 
 const app = express();
 const PORT = process.env.BACKEND_PORT;
@@ -17,14 +18,28 @@ app.use(cors({
 
 
 app.use('/uploads', express.static("/uploads"));
+app.use('/api/auth', authRouter)
 app.get('/healthz', (_, res) => {
   res.status(200).send("ok");
+});
+
+app.use((_err, _req, res, _) => {
+	res.status(500).json({ error: "Internal server error" });
 });
 
 
 async function start() {
   await verifyMySQL();
   console.log('Connected to MySQL');
+
+  const adminPassword = process.env.ADMIN_USER_PASSWORD;
+  const adminEmail = process.env.ADMIN_EMAIL;
+  if (adminPassword && adminEmail) {
+    const created = await users.ensureAdminUser(adminPassword, adminEmail);
+    console.log(created ? 'Created admin user' : 'Admin user already exists');
+  } else {
+    console.warn('ADMIN_USER_PASSWORD or ADMIN_EMAIL not set, skipping admin user creation');
+  }
 
   await verifyRedis();
   console.log('Connected to Redis');
