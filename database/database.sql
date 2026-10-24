@@ -23,7 +23,7 @@ USE `mydb` ;
 CREATE TABLE IF NOT EXISTS `mydb`.`uzytkownicy` (
   `id_uzytkownik` INT NOT NULL AUTO_INCREMENT,
   `nazwa` VARCHAR(30) NOT NULL,
-  `haslo` VARCHAR(45) NOT NULL,
+  `haslo` VARCHAR(255) NOT NULL,
   `email` VARCHAR(45) NOT NULL,
   `imie` VARCHAR(28) NULL,
   `nazwisko` VARCHAR(57) NULL,
