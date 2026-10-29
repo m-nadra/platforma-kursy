@@ -1,21 +1,26 @@
 const API_URL = "/api/auth";
 
-export async function login(login, password) {
-	let response;
-
+async function post(path, body) {
 	try {
-		response = await fetch(`${API_URL}/login`, {
+		const response = await fetch(`${API_URL}${path}`, {
 			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-			},
-			body: JSON.stringify({ login, password }),
+			headers: body ? { "Content-Type": "application/json" } : undefined,
+			body: body ? JSON.stringify(body) : undefined,
+			credentials: "same-origin",
 		});
+
+		const data = await response.json().catch(() => ({}));
+
+		return { response, data };
 	} catch {
 		return { error: "Nie udało się połączyć z serwerem" };
 	}
+}
 
-	const data = await response.json().catch(() => ({}));
+export async function login(login, password) {
+	const { response, data, error } = await post("/login", { login, password });
+
+	if (error) return { error };
 
 	if (!response.ok) {
 		const message =
@@ -27,4 +32,18 @@ export async function login(login, password) {
 	}
 
 	return { data };
+}
+
+export async function refresh() {
+	const { response, data, error } = await post("/refresh");
+
+	if (error || !response.ok) return { error: error || data.error };
+
+	return { data };
+}
+
+export async function logout() {
+	const { error } = await post("/logout");
+
+	return { error };
 }
