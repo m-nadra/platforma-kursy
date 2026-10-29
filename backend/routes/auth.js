@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { getUserCredentials } from "../db/users.js";
 import { verifyPassword } from "../auth/hashing.js";
-import { generateAccessToken } from "../auth/jwt.js"
+import { generateAccessToken, generateRefreshToken } from "../auth/jwt.js"
 
 const router = Router();
 
@@ -15,7 +15,13 @@ router.post("/login", async (req, res) => {
     if (user.czy_weryfikacja) {
         /// OTP verification
     }
-	// TODO! Refresh token
+
+	res.cookie("refresh_token", generateRefreshToken(user.id_uzytkownik), {
+		maxAge: 7 * 24 * 3600 * 1000,
+		httpOnly: true,
+		sameSite: "strict",
+		secure: process.env.NODE_ENV === "production"
+	});
 	
 	res.status(200).json({
 		message: "Login successful",

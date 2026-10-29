@@ -1,8 +1,11 @@
 import { useActionState } from "react";
 import { Link } from "react-router";
+import { useAuth } from "@/auth/AuthContext";
 
 export default function Login() {
-	const [errors, formAction] = useActionState(async (_, formData) => {
+	const { handleLogin } = useAuth();
+
+	const [errors, formAction, isPending] = useActionState(async (_, formData) => {
 		const login = formData.get("login");
 		const password = formData.get("password");
 		const formErrors = {};
@@ -10,8 +13,8 @@ export default function Login() {
 		if (!login) formErrors.login = "Podaj nazwę użytkownika lub adres e-mail";
 		if (!password) formErrors.password = "Podaj hasło";
 
-		if (Object.keys(formErrors).length === 0)
-			console.log("Login")
+		if (Object.keys(formErrors).length === 0) 
+			formErrors.serverResponse = await handleLogin({ login, password });
 		return formErrors;
 	}, {});
 
@@ -64,8 +67,9 @@ export default function Login() {
 
 				<input
 					type="submit"
-					value="Zaloguj się"
-					className="mt-2 cursor-pointer rounded-md bg-blue-600 px-4 py-2 font-medium text-white transition-colors hover:bg-blue-700"
+					value={isPending ? "Logowanie..." : "Zaloguj się"}
+					disabled={isPending}
+					className="mt-2 cursor-pointer rounded-md bg-blue-600 px-4 py-2 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
 				/>
 			</form>
 
