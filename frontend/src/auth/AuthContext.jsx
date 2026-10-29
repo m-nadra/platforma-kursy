@@ -4,6 +4,7 @@ import {
 	login as loginRequest,
 	logout as logoutRequest,
 	refresh as refreshRequest,
+	register as registerRequest,
 } from "@/auth/auth";
 
 const AuthContext = createContext(null);
@@ -56,6 +57,20 @@ export function AuthProvider({ children }) {
 		[applySession, navigate]
 	);
 
+	const handleRegister = useCallback(
+		async ({ username, email, password }) => {
+			const { data, error } = await registerRequest(username, email, password);
+
+			if (error) return error;
+
+			applySession(data);
+			navigate("/moje-kursy", { replace: true });
+
+			return null;
+		},
+		[applySession, navigate]
+	);
+
 	const refreshSession = useCallback(async () => {
 		const { data } = await refreshRequest();
 
@@ -79,6 +94,7 @@ export function AuthProvider({ children }) {
 				accessToken,
 				ready,
 				handleLogin,
+				handleRegister,
 				refreshSession,
 				logout,
 			}}

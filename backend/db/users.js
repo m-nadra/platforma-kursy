@@ -47,6 +47,24 @@ export async function getUserCredentials(nazwa) {
   );
 }
 
+export async function createUser({ nazwa, email, password }) {
+  const haslo = await hashPassword(password);
+
+  const result = await query(
+    `INSERT INTO uzytkownicy (nazwa, haslo, email, czy_admin, czy_weryfikacja)
+     VALUES (:nazwa, :haslo, :email, 0, 0)`,
+    { nazwa, haslo, email }
+  );
+
+  return {
+    id_uzytkownik: result.insertId,
+    nazwa,
+    email,
+    czy_admin: 0,
+    czy_weryfikacja: 0
+  };
+}
+
 export async function ensureAdminUser(password, email) {
   const existing = await queryOne(
     `SELECT id_uzytkownik FROM uzytkownicy WHERE nazwa = :nazwa`,

@@ -1,5 +1,11 @@
 import { Router } from "express";
-import { getUserById, getUserCredentials } from "../db/users.js";
+import {
+	createUser,
+	getUserByEmail,
+	getUserById,
+	getUserByName,
+	getUserCredentials
+} from "../db/users.js";
 import { verifyPassword } from "../auth/hashing.js";
 import {
 	generateAccessToken,
@@ -40,6 +46,72 @@ function buildSession(user) {
 		type: "Bearer"
 	};
 }
+
+function validateRegistration(username, email, password) {
+	if (typeof username !== "string" || !username.trim()) {
+		return "Podaj nazwę użytkownika";
+	}
+	if (username.trim().length > 30) {
+		return "Nazwa użytkownika może mieć maksymalnie 30 znaków";
+	}
+	if (typeof email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+		return "Podaj poprawny adres e-mail";
+	}
+	if (email.length > 45) {
+		return "Adres e-mail może mieć maksymalnie 45 znaków";
+	}
+	if (typeof password !== "string" || !password) {
+		return "Podaj hasło";
+	}
+	if (password.length > 255) {
+		return "Hasło jest zbyt długie";
+	}
+
+	return null;
+}
+
+router.post("/register", async (req, res) => {
+	const { username, email, password } = req.body ?? {};
+	const error = validateRegistration(username, email, password);
+
+	if (error) {
+		return res.status(400).json({ error });
+	}
+
+	const nazwa = username.trim();
+	const userEmail = email.trim();
+
+	if (await getUserByName(nazwa)) {
+		return res.status(409).json({ error: "Ta nazwa użytkownika jest już zajęta" });
+	}
+
+	if (await getUserByEmail(userEmail)) {
+		return res.status(409).json({ error: "Ten adres e-mail jest już zajęty" });
+	}
+
+	let user;
+	try {
+		user = await createUser({ nazwa, email: userEmail, password });
+	} catch (err) {
+		if (err.code === "ER_DUP_ENTRY") {
+			return res.status(409).json({ error: "Użytkownik już istnieje" });
+		}
+		throw err;
+	}
+
+	const refreshToken = generateRefreshToken(user.id_uzytkownik);
+	await saveRefreshToken(user.id_uzytkownik, refreshToken);
+
+	res.cookie("refresh_token", refreshToken, {
+		...refreshCookieOptions,
+		maxAge: REFRESH_TOKEN_MAX_AGE
+	});
+
+	res.status(201).json({
+		message: "Registration successful",
+		...buildSession(user)
+	});
+});
 
 router.post("/login", async (req, res) => {
 	const user = await getUserCredentials(req.body.login);

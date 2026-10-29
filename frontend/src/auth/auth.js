@@ -34,6 +34,24 @@ export async function login(login, password) {
 	return { data };
 }
 
+export async function register(username, email, password) {
+	const { response, data, error } = await post("/register", {
+		username,
+		email,
+		password,
+	});
+
+	if (error) return { error };
+
+	if (!response.ok) {
+		return {
+			error: data.error || "Wystąpił błąd podczas tworzenia konta",
+		};
+	}
+
+	return { data };
+}
+
 export async function refresh() {
 	const { response, data, error } = await post("/refresh");
 
