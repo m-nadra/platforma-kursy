@@ -7,11 +7,11 @@ if (!JWT_SECRET) {
 }
 
 export function generateAccessToken(payload) {
-	return jwt.sign(payload, JWT_SECRET, { expiresIn: '5m' });
+	return jwt.sign({...payload, type: 'access'}, JWT_SECRET, { expiresIn: '5m' });
 }
 
 export function generateRefreshToken(user_id) {
-	return jwt.sign({id: user_id}, JWT_SECRET, { expiresIn: '7d' });
+	return jwt.sign({id: user_id, type: 'refresh'}, JWT_SECRET, { expiresIn: '7d' });
 }
 
 export function generateOtpToken(user_id) {

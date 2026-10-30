@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import {
 	login as loginRequest,
@@ -14,11 +14,13 @@ export function AuthProvider({ children }) {
 	const [user, setUser] = useState(null);
 	const [accessToken, setAccessToken] = useState(null);
 	const [ready, setReady] = useState(false);
+	const accessTokenRef = useRef(null);
 	const navigate = useNavigate();
 
 	const applySession = useCallback((data) => {
 		const isAdmin = Boolean(data.is_admin);
 
+		accessTokenRef.current = data.accessToken;
 		setAccessToken(data.accessToken);
 		setUser({
 			isAdmin,
@@ -93,14 +95,42 @@ export function AuthProvider({ children }) {
 	const refreshSession = useCallback(async () => {
 		const { data } = await refreshRequest();
 
-		if (!data) return false;
+		if (!data) return null;
 
 		applySession(data);
-		return true;
+		return data.accessToken;
 	}, [applySession]);
+
+	const authFetch = useCallback(
+		async (input, init = {}) => {
+			const send = (token) => {
+				const headers = new Headers(init.headers);
+
+				if (token) headers.set("Authorization", `Bearer ${token}`);
+
+				return fetch(input, {
+					...init,
+					credentials: "same-origin",
+					headers,
+				});
+			};
+
+			let response = await send(accessTokenRef.current);
+
+			if (response.status !== 401) return response;
+
+			const token = await refreshSession();
+
+			if (!token) return response;
+
+			return send(token);
+		},
+		[refreshSession]
+	);
 
 	const logout = useCallback(async () => {
 		await logoutRequest();
+		accessTokenRef.current = null;
 		setUser(null);
 		setAccessToken(null);
 		navigate("/logowanie", { replace: true });
@@ -116,6 +146,7 @@ export function AuthProvider({ children }) {
 				handleOtp,
 				handleRegister,
 				refreshSession,
+				authFetch,
 				logout,
 			}}
 		>

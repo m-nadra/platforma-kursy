@@ -1,13 +1,14 @@
 import { verifyToken } from './jwt.js';
-import { getRefreshToken } from '../redis/index.js';
 import { getUserById } from '../db/users.js';
 
 export async function requireAuth(req, res, next) {
-  const token = req.cookies.refresh_token;
+  const header = req.headers.authorization;
 
-  if (!token) {
+  if (!header || !header.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Brak autoryzacji' });
   }
+
+  const token = header.slice('Bearer '.length).trim();
 
   let payload;
   try {
@@ -16,9 +17,8 @@ export async function requireAuth(req, res, next) {
     return res.status(401).json({ error: 'Sesja wygasła' });
   }
 
-  const storedToken = await getRefreshToken(payload.id);
-  if (!storedToken || storedToken !== token) {
-    return res.status(401).json({ error: 'Sesja wygasła' });
+  if (payload.type !== 'access' || !payload.id) {
+    return res.status(401).json({ error: 'Nieprawidłowy token' });
   }
 
   const user = await getUserById(payload.id);

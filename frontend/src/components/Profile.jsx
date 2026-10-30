@@ -33,7 +33,7 @@ function toForm(profile) {
 }
 
 export default function Profile() {
-	const { logout } = useAuth();
+	const { logout, authFetch } = useAuth();
 
 	const [profile, setProfile] = useState(null);
 	const [form, setForm] = useState(emptyForm);
@@ -66,7 +66,7 @@ export default function Profile() {
 		let active = true;
 
 		(async () => {
-			const { data, error } = await getProfile();
+			const { data, error } = await getProfile(authFetch);
 
 			if (!active) return;
 
@@ -83,7 +83,7 @@ export default function Profile() {
 		return () => {
 			active = false;
 		};
-	}, []);
+	}, [authFetch]);
 
 	function handleFormChange(event) {
 		const { name, value } = event.target;
@@ -96,7 +96,7 @@ export default function Profile() {
 		setProfileSuccess(null);
 		setProfilePending(true);
 
-		const { data, error } = await updateProfile(form);
+		const { data, error } = await updateProfile(authFetch, form);
 
 		setProfilePending(false);
 
@@ -115,7 +115,7 @@ export default function Profile() {
 		setOtpSuccess(null);
 		setOtpPending(true);
 
-		const { data, error } = await setOtp(!profile.czy_weryfikacja);
+		const { data, error } = await setOtp(authFetch, !profile.czy_weryfikacja);
 
 		setOtpPending(false);
 
@@ -146,6 +146,7 @@ export default function Profile() {
 		setPasswordPending(true);
 
 		const { data, error } = await changePassword(
+			authFetch,
 			passwordForm.currentPassword,
 			passwordForm.newPassword
 		);
@@ -176,7 +177,7 @@ export default function Profile() {
 
 		setDeletePending(true);
 
-		const { error } = await deleteAccount(deletePassword);
+		const { error } = await deleteAccount(authFetch, deletePassword);
 
 		if (error) {
 			setDeletePending(false);

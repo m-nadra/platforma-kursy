@@ -1,12 +1,11 @@
 const API_URL = "/api/profile";
 
-async function request(path = "", { method = "GET", body } = {}) {
+async function request(authFetch, path = "", { method = "GET", body } = {}) {
 	try {
-		const response = await fetch(`${API_URL}${path}`, {
+		const response = await authFetch(`${API_URL}${path}`, {
 			method,
 			headers: body ? { "Content-Type": "application/json" } : undefined,
 			body: body ? JSON.stringify(body) : undefined,
-			credentials: "same-origin",
 		});
 
 		const data = await response.json().catch(() => ({}));
@@ -21,25 +20,25 @@ async function request(path = "", { method = "GET", body } = {}) {
 	}
 }
 
-export function getProfile() {
-	return request();
+export function getProfile(authFetch) {
+	return request(authFetch);
 }
 
-export function updateProfile(profile) {
-	return request("", { method: "PUT", body: profile });
+export function updateProfile(authFetch, profile) {
+	return request(authFetch, "", { method: "PUT", body: profile });
 }
 
-export function setOtp(enabled) {
-	return request("/otp", { method: "PATCH", body: { enabled } });
+export function setOtp(authFetch, enabled) {
+	return request(authFetch, "/otp", { method: "PATCH", body: { enabled } });
 }
 
-export function changePassword(currentPassword, newPassword) {
-	return request("/password", {
+export function changePassword(authFetch, currentPassword, newPassword) {
+	return request(authFetch, "/password", {
 		method: "PUT",
 		body: { currentPassword, newPassword },
 	});
 }
 
-export function deleteAccount(password) {
-	return request("", { method: "DELETE", body: { password } });
+export function deleteAccount(authFetch, password) {
+	return request(authFetch, "", { method: "DELETE", body: { password } });
 }
