@@ -32,27 +32,12 @@ app.use((_err, _req, res, _) => {
 
 
 async function start() {
-  await verifyMySQL();
-  console.log('Connected to MySQL');
-
-  const adminPassword = process.env.ADMIN_USER_PASSWORD;
-  const adminEmail = process.env.ADMIN_EMAIL;
-  if (adminPassword && adminEmail) {
-    const created = await users.ensureAdminUser(adminPassword, adminEmail);
-    console.log(created ? 'Created admin user' : 'Admin user already exists');
-  } else {
-    console.warn('ADMIN_USER_PASSWORD or ADMIN_EMAIL not set, skipping admin user creation');
-  }
-
-  await verifyRedis();
-  console.log('Connected to Redis');
-
-  if (process.env.SMTP_HOST) {
-    await verifyEmailConnection();
-    console.log('Connected to SMTP');
-  } else {
-    console.warn('SMTP_HOST not set, skipping email verification');
-  }
+  await Promise.all([
+    verifyMySQL().then(() => console.log("Connected to MySQL")),
+    verifyRedis().then(() => console.log("Connected to Redis")),
+    verifyEmailConnection().then(() => console.log("Connected to SMTP")),
+  ])
+  await users.ensureAdminUser();
 
   const server = app.listen(PORT, () => {
     console.log(`Server listening on port ${PORT}`);
@@ -70,6 +55,6 @@ async function start() {
   process.on('SIGTERM', () => shutdown('SIGTERM'));
 }
 start().catch((err) => {
-  console.error('Failed to start server:', err.message);
+  console.error('Failed to start server:', err);
   process.exit(1);
 });

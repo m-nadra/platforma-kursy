@@ -116,12 +116,18 @@ export async function deleteUser(id) {
   );
 }
 
-export async function ensureAdminUser(password, email) {
+export async function ensureAdminUser() {
   const existing = await queryOne(
     `SELECT id_uzytkownik FROM uzytkownicy WHERE nazwa = :nazwa`,
     { nazwa: 'admin' }
   );
   if (existing) return false;
+
+  const adminPassword = process.env.ADMIN_USER_PASSWORD;
+  const adminEmail = process.env.ADMIN_EMAIL;
+  if (!adminPassword || !adminEmail) {
+    throw new Error("ADMIN_USER_PASSWORD or ADMIN_EMAIL not set")
+  }
 
   const haslo = await hashPassword(password);
   await query(
