@@ -4,6 +4,7 @@ import cors from 'cors';
 import cookieParser from "cookie-parser";
 import { verifyConnection as verifyMySQL, closePool, users } from './db/index.js';
 import { verifyConnection as verifyRedis, closeRedis } from './redis/index.js';
+import { verifyEmailConnection } from './email/mailer.js';
 import authRouter from './routes/auth.js'
 import profileRouter from './routes/profile.js'
 
@@ -45,6 +46,13 @@ async function start() {
 
   await verifyRedis();
   console.log('Connected to Redis');
+
+  if (process.env.SMTP_HOST) {
+    await verifyEmailConnection();
+    console.log('Connected to SMTP');
+  } else {
+    console.warn('SMTP_HOST not set, skipping email verification');
+  }
 
   const server = app.listen(PORT, () => {
     console.log(`Server listening on port ${PORT}`);
