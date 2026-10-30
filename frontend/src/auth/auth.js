@@ -34,6 +34,26 @@ export async function login(login, password) {
 	return { data };
 }
 
+export async function verifyOtp(otpToken, code) {
+	const { response, data, error } = await post("/login/otp", {
+		otpToken,
+		code,
+	});
+
+	if (error) return { error };
+
+	if (!response.ok) {
+		const message =
+			response.status === 401
+				? "Nieprawidłowy lub wygasły kod weryfikacyjny"
+				: data.error || "Wystąpił błąd podczas weryfikacji kodu";
+
+		return { error: message };
+	}
+
+	return { data };
+}
+
 export async function register(username, email, password) {
 	const { response, data, error } = await post("/register", {
 		username,

@@ -40,7 +40,7 @@ export async function getUserByEmail(email) {
 
 export async function getUserCredentials(nazwa) {
   return queryOne(
-    `SELECT id_uzytkownik, nazwa, haslo, czy_admin, czy_weryfikacja
+    `SELECT id_uzytkownik, nazwa, email, haslo, czy_admin, czy_weryfikacja
      FROM uzytkownicy
      WHERE nazwa = :nazwa OR email = :nazwa`,
     { nazwa }

@@ -5,6 +5,7 @@ import {
 	logout as logoutRequest,
 	refresh as refreshRequest,
 	register as registerRequest,
+	verifyOtp as verifyOtpRequest,
 } from "@/auth/auth";
 
 const AuthContext = createContext(null);
@@ -46,6 +47,24 @@ export function AuthProvider({ children }) {
 	const handleLogin = useCallback(
 		async ({ login, password }) => {
 			const { data, error } = await loginRequest(login, password);
+
+			if (error) return error;
+
+			if (data.otpRequired) {
+				return { otpRequired: true, otpToken: data.otpToken };
+			}
+
+			applySession(data);
+			navigate(data.is_admin ? "/admin" : "/moje-kursy", { replace: true });
+
+			return null;
+		},
+		[applySession, navigate]
+	);
+
+	const handleOtp = useCallback(
+		async ({ otpToken, code }) => {
+			const { data, error } = await verifyOtpRequest(otpToken, code);
 
 			if (error) return error;
 
@@ -94,6 +113,7 @@ export function AuthProvider({ children }) {
 				accessToken,
 				ready,
 				handleLogin,
+				handleOtp,
 				handleRegister,
 				refreshSession,
 				logout,

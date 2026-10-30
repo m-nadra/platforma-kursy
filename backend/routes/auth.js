@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { randomInt, timingSafeEqual } from "node:crypto";
 import {
 	createUser,
 	getUserByEmail,
@@ -9,14 +10,19 @@ import {
 import { verifyPassword } from "../auth/hashing.js";
 import {
 	generateAccessToken,
+	generateOtpToken,
 	generateRefreshToken,
 	verifyToken
 } from "../auth/jwt.js";
 import {
+	deleteOtp,
 	deleteRefreshToken,
+	getOtp,
 	getRefreshToken,
+	saveOtp,
 	saveRefreshToken
 } from "../redis/index.js";
+import { sendOtpEmail } from "../email/mailer.js";
 
 const router = Router();
 
@@ -45,6 +51,29 @@ function buildSession(user) {
 		is_admin: isAdmin,
 		type: "Bearer"
 	};
+}
+
+async function startSession(res, user) {
+	const refreshToken = generateRefreshToken(user.id_uzytkownik);
+	await saveRefreshToken(user.id_uzytkownik, refreshToken);
+
+	res.cookie("refresh_token", refreshToken, {
+		...refreshCookieOptions,
+		maxAge: REFRESH_TOKEN_MAX_AGE
+	});
+
+	return buildSession(user);
+}
+
+function generateOtpCode() {
+	return String(randomInt(0, 1_000_000)).padStart(6, "0");
+}
+
+function otpMatches(storedCode, providedCode) {
+	const stored = Buffer.from(storedCode);
+	const provided = Buffer.from(providedCode);
+
+	return stored.length === provided.length && timingSafeEqual(stored, provided);
 }
 
 function validateRegistration(username, email, password) {
@@ -121,20 +150,65 @@ router.post("/login", async (req, res) => {
 	}
 
 	if (user.czy_weryfikacja) {
-		/// OTP verification
+		const code = generateOtpCode();
+
+		await saveOtp(user.id_uzytkownik, code);
+
+		try {
+			await sendOtpEmail(user.email, code);
+		} catch (err) {
+			await deleteOtp(user.id_uzytkownik);
+			throw err;
+		}
+
+		return res.status(200).json({
+			message: "OTP required",
+			otpRequired: true,
+			otpToken: generateOtpToken(user.id_uzytkownik)
+		});
 	}
-
-	const refreshToken = generateRefreshToken(user.id_uzytkownik);
-	await saveRefreshToken(user.id_uzytkownik, refreshToken);
-
-	res.cookie("refresh_token", refreshToken, {
-		...refreshCookieOptions,
-		maxAge: REFRESH_TOKEN_MAX_AGE
-	});
 
 	res.status(200).json({
 		message: "Login successful",
-		...buildSession(user)
+		...(await startSession(res, user))
+	});
+});
+
+router.post("/login/otp", async (req, res) => {
+	const { otpToken, code } = req.body ?? {};
+
+	if (typeof otpToken !== "string" || typeof code !== "string" || !/^\d{6}$/.test(code)) {
+		return res.status(400).json({ error: "Nieprawidłowy kod weryfikacyjny" });
+	}
+
+	let payload;
+	try {
+		payload = verifyToken(otpToken);
+	} catch {
+		return res.status(401).json({ error: "Kod wygasł lub jest nieprawidłowy" });
+	}
+
+	if (payload.purpose !== "otp") {
+		return res.status(401).json({ error: "Kod wygasł lub jest nieprawidłowy" });
+	}
+
+	const storedCode = await getOtp(payload.id);
+
+	if (!storedCode || !otpMatches(storedCode, code)) {
+		return res.status(401).json({ error: "Kod wygasł lub jest nieprawidłowy" });
+	}
+
+	await deleteOtp(payload.id);
+
+	const user = await getUserById(payload.id);
+
+	if (!user) {
+		return res.status(401).json({ error: "Kod wygasł lub jest nieprawidłowy" });
+	}
+
+	res.status(200).json({
+		message: "Login successful",
+		...(await startSession(res, user))
 	});
 });
 

@@ -1,9 +1,11 @@
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { Link } from "react-router";
 import { useAuth } from "@/auth/AuthContext";
+import OtpForm from "@/components/OtpForm";
 
 export default function Login() {
 	const { handleLogin } = useAuth();
+	const [otpToken, setOtpToken] = useState(null);
 
 	const [errors, formAction, isPending] = useActionState(async (_, formData) => {
 		const login = formData.get("login");
@@ -13,10 +15,21 @@ export default function Login() {
 		if (!login) formErrors.login = "Podaj nazwę użytkownika lub adres e-mail";
 		if (!password) formErrors.password = "Podaj hasło";
 
-		if (Object.keys(formErrors).length === 0) 
-			formErrors.serverResponse = await handleLogin({ login, password });
+		if (Object.keys(formErrors).length === 0) {
+			const result = await handleLogin({ login, password });
+
+			if (result?.otpRequired) {
+				setOtpToken(result.otpToken);
+			} else {
+				formErrors.serverResponse = result;
+			}
+		}
 		return formErrors;
 	}, {});
+
+	if (otpToken) {
+		return <OtpForm otpToken={otpToken} onCancel={() => setOtpToken(null)} />;
+	}
 
 	return (
 		<div>
