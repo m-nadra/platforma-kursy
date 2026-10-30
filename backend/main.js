@@ -5,6 +5,7 @@ import cookieParser from "cookie-parser";
 import { verifyConnection as verifyMySQL, closePool, users } from './db/index.js';
 import { verifyConnection as verifyRedis, closeRedis } from './redis/index.js';
 import authRouter from './routes/auth.js'
+import profileRouter from './routes/profile.js'
 
 const app = express();
 const PORT = process.env.BACKEND_PORT;
@@ -18,6 +19,7 @@ app.use(cors({
 
 
 app.use('/uploads', express.static("/uploads"));
+app.use('/api/auth/profile', profileRouter)
 app.use('/api/auth', authRouter)
 app.get('/healthz', (_, res) => {
   res.status(200).send("ok");

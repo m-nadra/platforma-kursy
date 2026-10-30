@@ -65,6 +65,57 @@ export async function createUser({ nazwa, email, password }) {
   };
 }
 
+export async function getUserPasswordById(id) {
+  return queryOne(
+    `SELECT haslo
+     FROM uzytkownicy
+     WHERE id_uzytkownik = :id`,
+    { id }
+  );
+}
+
+export async function updateUserProfile(id, { nazwa, email, imie, nazwisko, kraj, wyksztalcenie }) {
+  await query(
+    `UPDATE uzytkownicy
+     SET nazwa = :nazwa, email = :email, imie = :imie, nazwisko = :nazwisko,
+         kraj = :kraj, wyksztalcenie = :wyksztalcenie
+     WHERE id_uzytkownik = :id`,
+    { id, nazwa, email, imie, nazwisko, kraj, wyksztalcenie }
+  );
+
+  return getUserById(id);
+}
+
+export async function updateUserPassword(id, password) {
+  const haslo = await hashPassword(password);
+
+  await query(
+    `UPDATE uzytkownicy
+     SET haslo = :haslo
+     WHERE id_uzytkownik = :id`,
+    { id, haslo }
+  );
+}
+
+export async function setUserVerification(id, enabled) {
+  await query(
+    `UPDATE uzytkownicy
+     SET czy_weryfikacja = :enabled
+     WHERE id_uzytkownik = :id`,
+    { id, enabled: enabled ? 1 : 0 }
+  );
+
+  return getUserById(id);
+}
+
+export async function deleteUser(id) {
+  await query(
+    `DELETE FROM uzytkownicy
+     WHERE id_uzytkownik = :id`,
+    { id }
+  );
+}
+
 export async function ensureAdminUser(password, email) {
   const existing = await queryOne(
     `SELECT id_uzytkownik FROM uzytkownicy WHERE nazwa = :nazwa`,

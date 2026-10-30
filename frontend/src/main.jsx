@@ -8,6 +8,7 @@ import Main from "@/components/Main";
 import Katalog from "@/components/Katalog";
 import MojeKursy from "@/components/MojeKursy";
 import Admin from "@/components/Admin";
+import Profile from "@/components/Profile";
 import RequireAuth from "@/routes/RequireAuth";
 
 function Root() {
@@ -41,6 +42,7 @@ const router = createBrowserRouter([
 				element: <RequireAuth />,
 				children: [
 					{ path: "/moje-kursy", element: <MojeKursy /> },
+					{ path: "/profil", element: <Profile /> },
 				],
 			},
 			{
