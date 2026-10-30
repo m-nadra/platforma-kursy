@@ -26,10 +26,10 @@ export async function verifyEmailConnection() {
   await getTransporter().verify();
 }
 
-export async function sendOtpEmail(reveicer, code) {
+export async function sendOtpEmail(receiver, code) {
   await getTransporter().sendMail({
     from: process.env.SMTP_USER,
-    to: reveicer,
+    to: receiver,
     subject: 'Kod weryfikacyjny',
     text: `Twój kod weryfikacyjny to ${code}. Kod jest ważny przez 5 minut.`,
     html: `<p>Twój kod weryfikacyjny to <strong>${code}</strong>.</p><p>Kod jest ważny przez 5 minut.</p>`
