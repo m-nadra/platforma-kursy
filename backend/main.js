@@ -19,7 +19,7 @@ app.use(cors({
 
 
 app.use('/uploads', express.static("/uploads"));
-app.use('/api/auth/profile', profileRouter)
+app.use('/api/profile', profileRouter)
 app.use('/api/auth', authRouter)
 app.get('/healthz', (_, res) => {
   res.status(200).send("ok");

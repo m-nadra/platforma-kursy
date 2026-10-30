@@ -29,7 +29,7 @@ const router = Router();
 const REFRESH_TOKEN_MAX_AGE = 7 * 24 * 3600 * 1000;
 
 const refreshCookieOptions = {
-	path: "/api/auth",
+	path: "/api",
 	httpOnly: true,
 	sameSite: "strict",
 	secure: process.env.NODE_ENV === "production"

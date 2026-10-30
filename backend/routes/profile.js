@@ -15,7 +15,7 @@ import { deleteOtp, deleteRefreshToken } from "../redis/index.js";
 const router = Router();
 
 const refreshCookieOptions = {
-	path: "/api/auth",
+	path: "/api",
 	httpOnly: true,
 	sameSite: "strict",
 	secure: process.env.NODE_ENV === "production"

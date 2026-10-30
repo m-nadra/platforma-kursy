@@ -1,4 +1,4 @@
-const API_URL = "/api/auth/profile";
+const API_URL = "/api/profile";
 
 async function request(path = "", { method = "GET", body } = {}) {
 	try {
