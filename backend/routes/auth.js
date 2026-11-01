@@ -1,29 +1,41 @@
 import { Router } from "express";
-import { createUser, getUserById, getUserCredentials } from "../db/users.js";
-import { verifyPassword } from "../auth/hashing.js";
+import {
+	createUser,
+	getUserById,
+	getUserCredentials,
+	updateUserPassword
+} from "../db/users.js";
+import { needsRehash, verifyPassword } from "../auth/hashing.js";
 import { generateOtpToken, tryVerifyToken } from "../auth/jwt.js";
 import { REFRESH_COOKIE, clearRefreshCookie, startSession } from "../auth/session.js";
 import { sendLoginOtp } from "../auth/otp.js";
 import { parseRegistration } from "../auth/validation.js";
 import { asyncHandler } from "../middleware/asyncHandler.js";
 import {
-	deleteSession, isRefreshTokenValid, verifyAndConsumeOtp
+	deleteSession,
+	isRefreshTokenValid,
+	verifyAndConsumeOtp
 } from "../redis/index.js";
 
 const router = Router();
 
 const OTP_ERROR = { error: "Kod wygasł lub jest nieprawidłowy" };
+const REFRESH_ERROR = { error: "Invalid refresh token" };
 
 router.post("/register", asyncHandler(async (req, res) => {
 	const { error, data } = parseRegistration(req.body);
-	if (error) return res.status(400).json({ error });
+	if (error) {
+		return res.status(400).json({ error });
+	}
 
 	let user;
 	try {
 		user = await createUser(data);
 	} catch (err) {
 		if (err.code === "ER_DUP_ENTRY") {
-			return res.status(409).json({ error: "Nazwa użytkownika lub adres e-mail są już zajęte" });
+			return res
+				.status(409)
+				.json({ error: "Nazwa użytkownika lub adres e-mail są już zajęte" });
 		}
 		throw err;
 	}
@@ -40,9 +52,16 @@ router.post("/login", asyncHandler(async (req, res) => {
 		return res.status(400).json({ error: "Podaj login i hasło" });
 	}
 
-	const user = await getUserCredentials(login);
-	if (!user || !(await verifyPassword(user.haslo, password))) {
-		return res.status(401).json({ error: "Nieprawidłowy login lub hasło" });
+	const user = await getUserCredentials(login.trim());
+
+	if (!(await verifyPassword(user?.haslo, password))) {
+		return res.status(401).json({ error: "Invalid username or password" });
+	}
+
+	if (needsRehash(user.haslo)) {
+		updateUserPassword(user.id_uzytkownik, password).catch((err) =>
+			console.error("Password rehash failed:", err)
+		);
 	}
 
 	if (user.czy_weryfikacja) {
@@ -67,20 +86,26 @@ router.post("/login/otp", asyncHandler(async (req, res) => {
 	}
 
 	const payload = tryVerifyToken(otpToken, "otp");
-	if (!payload) return res.status(401).json(OTP_ERROR);
+	if (!payload) {
+		return res.status(401).json(OTP_ERROR);
+	}
 
 	const result = await verifyAndConsumeOtp(payload.id, code);
 	if (result === -1) {
 		return res.status(429).json({ error: "Zbyt wiele prób, zaloguj się ponownie" });
 	}
-	if (result !== 1) return res.status(401).json(OTP_ERROR);
+	if (result !== 1) {
+		return res.status(401).json(OTP_ERROR);
+	}
 
 	const user = await getUserById(payload.id);
-	if (!user) return res.status(401).json(OTP_ERROR);
+	if (!user) {
+		return res.status(401).json(OTP_ERROR);
+	}
 
 	res.status(200).json({
 		message: "Login successful",
-		...(await startSession(res, user)),
+		...(await startSession(res, user))
 	});
 }));
 
@@ -88,31 +113,30 @@ router.post("/refresh", asyncHandler(async (req, res) => {
 	const token = req.cookies[REFRESH_COOKIE];
 	const payload = tryVerifyToken(token, "refresh");
 
-	if (!payload || !(await isRefreshTokenValid(payload.id, payload.sid, token))) {
+	if (!payload?.sid) {
 		clearRefreshCookie(res);
-		return res.status(401).json({ error: "Invalid refresh token" });
+		return res.status(401).json(REFRESH_ERROR);
 	}
 
-	const user = await getUserById(payload.id);
+	const { id, sid } = payload;
+	const user = (await isRefreshTokenValid(id, sid, token)) ? await getUserById(id) : null;
+
 	if (!user) {
-		await deleteSession(payload.id, payload.sid);
+		await deleteSession(id, sid);
 		clearRefreshCookie(res);
-		return res.status(401).json({ error: "Invalid refresh token" });
+		return res.status(401).json(REFRESH_ERROR);
 	}
-
-	const session = await startSession(res, user);
-	await deleteSession(payload.id, payload.sid);
 
 	res.status(200).json({
 		message: "Token refreshed",
-		...session
+		...(await startSession(res, user, sid))
 	});
 }));
 
 router.post("/logout", asyncHandler(async (req, res) => {
 	const payload = tryVerifyToken(req.cookies[REFRESH_COOKIE], "refresh");
 
-	if (payload) {
+	if (payload?.sid) {
 		await deleteSession(payload.id, payload.sid);
 	}
 

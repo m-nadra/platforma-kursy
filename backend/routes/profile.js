@@ -1,77 +1,19 @@
 import { Router } from "express";
-import { requireAuth } from "../auth/middleware.js";
-import { clearRefreshCookie } from "../auth/session.js";
-import { verifyPassword } from "../auth/hashing.js";
-import {
-	deleteUser,
-	getUserByEmail,
-	getUserByName,
-	getUserPasswordById,
-	setUserVerification,
-	updateUserPassword,
-	updateUserProfile
-} from "../db/users.js";
-import { deleteAllSessions, deleteOtp } from "../redis/index.js";
+import { requireAuth } from "../middleware/requireAuth.js";
+import { asyncHandler } from "../middleware/asyncHandler.js";
+import { clearRefreshCookie, startSession } from "../auth/session.js";
+import { confirmPassword } from "../auth/credentials.js";
+import { parseProfile, validateNewPassword } from "../auth/validation.js";
+import { buildProfile } from "../serializers/profile.js";
+import { changePassword, deleteAccount } from "../services/account.js";
+import { setUserVerification, updateUserProfile } from "../db/users.js";
 
 const router = Router();
 
-const optionalFields = [
-	["imie", 28, "Imię"],
-	["nazwisko", 57, "Nazwisko"],
-	["kraj", 50, "Kraj"],
-	["wyksztalcenie", 16, "Wykształcenie"]
-];
-
-function buildProfile(user) {
-	return {
-		id: user.id_uzytkownik,
-		nazwa: user.nazwa,
-		email: user.email,
-		imie: user.imie,
-		nazwisko: user.nazwisko,
-		kraj: user.kraj,
-		wyksztalcenie: user.wyksztalcenie,
-		czy_admin: Boolean(user.czy_admin),
-		czy_weryfikacja: Boolean(user.czy_weryfikacja)
-	};
-}
-
-function normalizeOptional(value) {
-	if (typeof value !== "string") return null;
-
-	const trimmed = value.trim();
-	return trimmed || null;
-}
-
-function validateProfile(body) {
-	const { nazwa, email } = body;
-
-	if (typeof nazwa !== "string" || !nazwa.trim()) {
-		return "Podaj nazwę użytkownika";
-	}
-	if (nazwa.trim().length > 30) {
-		return "Nazwa użytkownika może mieć maksymalnie 30 znaków";
-	}
-	if (typeof email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-		return "Podaj poprawny adres e-mail";
-	}
-	if (email.length > 45) {
-		return "Adres e-mail może mieć maksymalnie 45 znaków";
-	}
-
-	for (const [field, maxLength, label] of optionalFields) {
-		const value = body[field];
-
-		if (value !== undefined && value !== null && typeof value !== "string") {
-			return `Nieprawidłowa wartość pola ${label}`;
-		}
-		if (typeof value === "string" && value.trim().length > maxLength) {
-			return `${label} może mieć maksymalnie ${maxLength} znaków`;
-		}
-	}
-
-	return null;
-}
+const DELETE_ERRORS = {
+	LAST_ADMIN: "Nie można usunąć ostatniego administratora",
+	HAS_COURSES: "Nie można usunąć konta, ponieważ jest powiązane z kursami"
+};
 
 router.use(requireAuth);
 
@@ -79,40 +21,20 @@ router.get("/", (req, res) => {
 	res.status(200).json({ user: buildProfile(req.user) });
 });
 
-router.put("/", async (req, res) => {
-	const body = req.body ?? {};
-	const error = validateProfile(body);
-
+router.put("/", asyncHandler(async (req, res) => {
+	const { error, data } = parseProfile(req.body);
 	if (error) {
 		return res.status(400).json({ error });
 	}
 
-	const nazwa = body.nazwa.trim();
-	const email = body.email.trim();
-
-	const userWithName = await getUserByName(nazwa);
-	if (userWithName && userWithName.id_uzytkownik !== req.user.id_uzytkownik) {
-		return res.status(409).json({ error: "Ta nazwa użytkownika jest już zajęta" });
-	}
-
-	const userWithEmail = await getUserByEmail(email);
-	if (userWithEmail && userWithEmail.id_uzytkownik !== req.user.id_uzytkownik) {
-		return res.status(409).json({ error: "Ten adres e-mail jest już zajęty" });
-	}
-
 	let user;
 	try {
-		user = await updateUserProfile(req.user.id_uzytkownik, {
-			nazwa,
-			email,
-			imie: normalizeOptional(body.imie),
-			nazwisko: normalizeOptional(body.nazwisko),
-			kraj: normalizeOptional(body.kraj),
-			wyksztalcenie: normalizeOptional(body.wyksztalcenie)
-		});
+		user = await updateUserProfile(req.user.id_uzytkownik, data);
 	} catch (err) {
 		if (err.code === "ER_DUP_ENTRY") {
-			return res.status(409).json({ error: "Nazwa użytkownika lub adres e-mail są już zajęte" });
+			return res
+				.status(409)
+				.json({ error: "Nazwa użytkownika lub adres e-mail są już zajęte" });
 		}
 		throw err;
 	}
@@ -121,9 +43,9 @@ router.put("/", async (req, res) => {
 		message: "Profil został zaktualizowany",
 		user: buildProfile(user)
 	});
-});
+}));
 
-router.patch("/otp", async (req, res) => {
+router.patch("/otp", asyncHandler(async (req, res) => {
 	const { enabled } = req.body ?? {};
 
 	if (typeof enabled !== "boolean") {
@@ -138,65 +60,52 @@ router.patch("/otp", async (req, res) => {
 			: "Weryfikacja dwuetapowa została wyłączona",
 		user: buildProfile(user)
 	});
-});
+}));
 
-router.put("/password", async (req, res) => {
+router.put("/password", asyncHandler(async (req, res) => {
 	const { currentPassword, newPassword } = req.body ?? {};
 
 	if (typeof currentPassword !== "string" || !currentPassword) {
 		return res.status(400).json({ error: "Podaj obecne hasło" });
 	}
-	if (typeof newPassword !== "string" || !newPassword) {
-		return res.status(400).json({ error: "Podaj nowe hasło" });
+	const error = validateNewPassword(newPassword);
+	if (error) {
+		return res.status(400).json({ error });
 	}
-	if (newPassword.length > 255) {
-		return res.status(400).json({ error: "Hasło jest zbyt długie" });
+	if (newPassword === currentPassword) {
+		return res.status(400).json({ error: "Nowe hasło musi różnić się od obecnego" });
 	}
 
-	const credentials = await getUserPasswordById(req.user.id_uzytkownik);
-
-	if (!credentials || !(await verifyPassword(credentials.haslo, currentPassword))) {
+	if (!(await confirmPassword(req.user.id_uzytkownik, currentPassword))) {
 		return res.status(401).json({ error: "Obecne hasło jest nieprawidłowe" });
 	}
 
-	await updateUserPassword(req.user.id_uzytkownik, newPassword);
+	await changePassword(req.user.id_uzytkownik, newPassword);
 
-	res.status(200).json({ message: "Hasło zostało zmienione" });
-});
+	res.status(200).json({
+		message: "Hasło zostało zmienione",
+		...(await startSession(res, req.user))
+	});
+}));
 
-router.delete("/", async (req, res) => {
+router.delete("/", asyncHandler(async (req, res) => {
 	const { password } = req.body ?? {};
 
 	if (typeof password !== "string" || !password) {
 		return res.status(400).json({ error: "Podaj hasło, aby usunąć konto" });
 	}
 
-	const credentials = await getUserPasswordById(req.user.id_uzytkownik);
-
-	if (!credentials || !(await verifyPassword(credentials.haslo, password))) {
+	if (!(await confirmPassword(req.user.id_uzytkownik, password))) {
 		return res.status(401).json({ error: "Hasło jest nieprawidłowe" });
 	}
 
-	try {
-		await deleteUser(req.user.id_uzytkownik);
-	} catch (err) {
-		if (err.code === "ER_ROW_IS_REFERENCED_2" || err.code === "ER_ROW_IS_REFERENCED") {
-			return res.status(409).json({
-				error: "Nie można usunąć konta, ponieważ jest powiązane z kursami"
-			});
-		}
-		throw err;
+	const result = await deleteAccount(req.user);
+	if (result.error) {
+		return res.status(409).json({ error: DELETE_ERRORS[result.error] });
 	}
-
-	await deleteAllSessions(req.user.id_uzytkownik);
-	await deleteOtp(req.user.id_uzytkownik);
 
 	clearRefreshCookie(res);
 	res.status(200).json({ message: "Konto zostało usunięte" });
-});
-
-router.use((err, _req, res, _) => {
-	res.status(500).json({ error: err.message });
-});
+}));
 
 export default router;
