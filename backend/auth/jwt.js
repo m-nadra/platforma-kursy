@@ -1,23 +1,35 @@
 import jwt from 'jsonwebtoken';
 
 const JWT_SECRET = process.env.JWT_SECRET;
-
-if (!JWT_SECRET) {
-	throw new Error('JWT_SECRET environment variable is not set');
+if (!JWT_SECRET || JWT_SECRET.length < 32) {
+	throw new Error('JWT_SECRET must be set and at least 32 characters long');
 }
 
-export function generateAccessToken(payload) {
-	return jwt.sign({...payload, type: 'access'}, JWT_SECRET, { expiresIn: '5m' });
+const ALGORITHM = 'HS256';
+
+export const REFRESH_TTL_SECONDS = 7 * 24 * 3600;
+export const REFRESH_TTL_MS = REFRESH_TTL_SECONDS * 1000;
+
+const sign = (payload, type, expiresIn) =>
+	jwt.sign({ ...payload, type }, JWT_SECRET, { algorithm: ALGORITHM, expiresIn });
+
+export const generateAccessToken = (payload) => sign(payload, 'access', '5m');
+export const generateRefreshToken = (id, sid) => sign({ id, sid }, 'refresh', REFRESH_TTL_SECONDS);
+export const generateOtpToken = (id) => sign({ id }, 'otp', '5m');
+
+export function verifyToken(token, type) {
+	const payload = jwt.verify(token, JWT_SECRET, { algorithms: [ALGORITHM] });
+	if (payload.type !== type) {
+		throw new jwt.JsonWebTokenError('Invalid token type');
+	}
+	return payload;
 }
 
-export function generateRefreshToken(user_id) {
-	return jwt.sign({id: user_id, type: 'refresh'}, JWT_SECRET, { expiresIn: '7d' });
-}
-
-export function generateOtpToken(user_id) {
-	return jwt.sign({id: user_id, purpose: 'otp'}, JWT_SECRET, { expiresIn: '5m' });
-}
-
-export function verifyToken(token) {
-	return jwt.verify(token, JWT_SECRET);
+export function tryVerifyToken(token, type) {
+	if (typeof token !== 'string') return null;
+	try {
+		return verifyToken(token, type);
+	} catch {
+		return null;
+	}
 }

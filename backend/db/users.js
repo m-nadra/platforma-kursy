@@ -123,9 +123,9 @@ export async function ensureAdminUser() {
   );
   if (existing) return false;
 
-  const adminPassword = process.env.ADMIN_USER_PASSWORD;
-  const adminEmail = process.env.ADMIN_EMAIL;
-  if (!adminPassword || !adminEmail) {
+  const password = process.env.ADMIN_USER_PASSWORD;
+  const email = process.env.ADMIN_EMAIL;
+  if (!password || !email) {
     throw new Error("ADMIN_USER_PASSWORD or ADMIN_EMAIL not set")
   }
 
@@ -133,7 +133,7 @@ export async function ensureAdminUser() {
   await query(
     `INSERT INTO uzytkownicy (nazwa, haslo, email, czy_admin, czy_weryfikacja)
      VALUES (:nazwa, :haslo, :email, 1, 0)`,
-    { nazwa: 'admin', haslo, email: email }
+    { nazwa: 'admin', haslo, email }
   );
   return true;
 }

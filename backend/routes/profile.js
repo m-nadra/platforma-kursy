@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../auth/middleware.js";
+import { clearRefreshCookie } from "../auth/session.js";
 import { verifyPassword } from "../auth/hashing.js";
 import {
 	deleteUser,
@@ -10,16 +11,9 @@ import {
 	updateUserPassword,
 	updateUserProfile
 } from "../db/users.js";
-import { deleteOtp, deleteRefreshToken } from "../redis/index.js";
+import { deleteAllSessions, deleteOtp } from "../redis/index.js";
 
 const router = Router();
-
-const refreshCookieOptions = {
-	path: "/api",
-	httpOnly: true,
-	sameSite: "strict",
-	secure: process.env.NODE_ENV === "production"
-};
 
 const optionalFields = [
 	["imie", 28, "Imię"],
@@ -194,10 +188,10 @@ router.delete("/", async (req, res) => {
 		throw err;
 	}
 
-	await deleteRefreshToken(req.user.id_uzytkownik);
+	await deleteAllSessions(req.user.id_uzytkownik);
 	await deleteOtp(req.user.id_uzytkownik);
 
-	res.clearCookie("refresh_token", refreshCookieOptions);
+	clearRefreshCookie(res);
 	res.status(200).json({ message: "Konto zostało usunięte" });
 });
 
