@@ -1,8 +1,11 @@
 import { useActionState } from "react";
 import { Link } from "react-router";
+import { useAuth } from "@/auth/AuthContext";
 
 export default function Signup() {
-	const [errors, formAction] = useActionState(async (_, formData) => {
+	const { handleRegister } = useAuth();
+
+	const [errors, formAction, isPending] = useActionState(async (_, formData) => {
 		const username = formData.get("username");
 		const email = formData.get("email");
 		const password = formData.get("password");
@@ -18,7 +21,11 @@ export default function Signup() {
 		if (password !== password2) formErrors.repeated_password = "Hasła nie są takie same";
 
 		if (Object.keys(formErrors).length === 0)
-			console.log("Rejestracja")
+			formErrors.serverResponse = await handleRegister({
+				username,
+				email,
+				password,
+			});
 		return formErrors;
 	}, {});
 
@@ -105,8 +112,9 @@ export default function Signup() {
 
 				<input
 					type="submit"
-					value="Załóż konto"
-					className="mt-2 cursor-pointer rounded-md bg-blue-600 px-4 py-2 font-medium text-white transition-colors hover:bg-blue-700"
+					value={isPending ? "Tworzenie konta..." : "Załóż konto"}
+					disabled={isPending}
+					className="mt-2 cursor-pointer rounded-md bg-blue-600 px-4 py-2 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
 				/>
 			</form>
 

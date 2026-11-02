@@ -1,15 +1,155 @@
-import { createContext, useContext, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router";
+import {
+	login as loginRequest,
+	logout as logoutRequest,
+	refresh as refreshRequest,
+	register as registerRequest,
+	verifyOtp as verifyOtpRequest,
+} from "@/auth/auth";
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
 	const [user, setUser] = useState(null);
+	const [accessToken, setAccessToken] = useState(null);
+	const [ready, setReady] = useState(false);
+	const accessTokenRef = useRef(null);
+	const navigate = useNavigate();
 
-	const login = (userData) => setUser(userData);
-	const logout = () => setUser(null);
+	const applySession = useCallback((data) => {
+		const isAdmin = Boolean(data.is_admin);
+
+		accessTokenRef.current = data.accessToken;
+		setAccessToken(data.accessToken);
+		setUser({
+			isAdmin,
+			role: isAdmin ? "admin" : "user",
+		});
+	}, []);
+
+	useEffect(() => {
+		let active = true;
+
+		(async () => {
+			const { data } = await refreshRequest();
+
+			if (!active) return;
+
+			if (data) applySession(data);
+
+			setReady(true);
+		})();
+
+		return () => {
+			active = false;
+		};
+	}, [applySession]);
+
+	const handleLogin = useCallback(
+		async ({ login, password }) => {
+			const { data, error } = await loginRequest(login, password);
+
+			if (error) return error;
+
+			if (data.otpRequired) {
+				return { otpRequired: true, otpToken: data.otpToken };
+			}
+
+			applySession(data);
+			navigate(data.is_admin ? "/admin" : "/moje-kursy", { replace: true });
+
+			return null;
+		},
+		[applySession, navigate]
+	);
+
+	const handleOtp = useCallback(
+		async ({ otpToken, code }) => {
+			const { data, error } = await verifyOtpRequest(otpToken, code);
+
+			if (error) return error;
+
+			applySession(data);
+			navigate(data.is_admin ? "/admin" : "/moje-kursy", { replace: true });
+
+			return null;
+		},
+		[applySession, navigate]
+	);
+
+	const handleRegister = useCallback(
+		async ({ username, email, password }) => {
+			const { data, error } = await registerRequest(username, email, password);
+
+			if (error) return error;
+
+			applySession(data);
+			navigate("/moje-kursy", { replace: true });
+
+			return null;
+		},
+		[applySession, navigate]
+	);
+
+	const refreshSession = useCallback(async () => {
+		const { data } = await refreshRequest();
+
+		if (!data) return null;
+
+		applySession(data);
+		return data.accessToken;
+	}, [applySession]);
+
+	const authFetch = useCallback(
+		async (input, init = {}) => {
+			const send = (token) => {
+				const headers = new Headers(init.headers);
+
+				if (token) headers.set("Authorization", `Bearer ${token}`);
+
+				return fetch(input, {
+					...init,
+					credentials: "same-origin",
+					headers,
+				});
+			};
+
+			let response = await send(accessTokenRef.current);
+
+			if (response.status !== 401) return response;
+
+			const token = await refreshSession();
+
+			if (!token) return response;
+
+			return send(token);
+		},
+		[refreshSession]
+	);
+
+	const logout = useCallback(async () => {
+		await logoutRequest();
+		accessTokenRef.current = null;
+		setUser(null);
+		setAccessToken(null);
+		navigate("/logowanie", { replace: true });
+	}, [navigate]);
 
 	return (
-		<AuthContext.Provider value={{ user, login, logout }}>
+		<AuthContext.Provider
+			value={{
+				user,
+				accessToken,
+				ready,
+				handleLogin,
+				handleOtp,
+				handleRegister,
+				refreshSession,
+				authFetch,
+				logout,
+			}}
+		>
 			{children}
 		</AuthContext.Provider>
 	);
