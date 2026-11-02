@@ -19,13 +19,13 @@ export default function Navbar() {
 						Katalog kursów
 					</Link>
 
-					{user && (
+					{!user?.isAdmin && (
 						<>
 							<Link
-								to={user.isAdmin ? "/admin" : "/moje-kursy"}
+								to="/moje-kursy"
 								className="text-sm font-medium text-gray-600 transition-colors hover:text-blue-600"
 							>
-								{user.isAdmin ? "Panel administratora" : "Moje kursy"}
+								Moje kursy
 							</Link>
 							<Link
 								to="/profil"

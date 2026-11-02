@@ -39,7 +39,7 @@ const router = createBrowserRouter([
 				],
 			},
 			{
-				element: <RequireAuth />,
+				element: <RequireAuth role="user" />,
 				children: [
 					{ path: "/moje-kursy", element: <MojeKursy /> },
 					{ path: "/profil", element: <Profile /> },
